@@ -9,12 +9,15 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "turbo": "latest",
-    "prettier": "^3.0.0"
+    "prettier": "^3.0.0",
+    "turbo": "latest"
   },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
-  "packageManager": "npm@8.19.4"
+  "packageManager": "npm@8.19.4",
+  "dependencies": {
+    "bcrypt": "^6.0.0"
+  }
 }
