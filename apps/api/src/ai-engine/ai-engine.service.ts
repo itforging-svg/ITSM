@@ -1,13 +1,20 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI, GenerativeModel, SchemaType } from '@google/generative-ai';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, ILike } from 'typeorm';
+import { KnowledgeBase } from './entities/knowledge-base.entity';
 
 @Injectable()
 export class AiEngineService implements OnModuleInit {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
 
-    constructor(private configService: ConfigService) { }
+    constructor(
+        private configService: ConfigService,
+        @InjectRepository(KnowledgeBase)
+        private kbRepository: Repository<KnowledgeBase>,
+    ) { }
 
     onModuleInit() {
         const apiKey = this.configService.get<string>('GEMINI_API_KEY');
@@ -104,9 +111,23 @@ export class AiEngineService implements OnModuleInit {
 
                 let toolResult: any;
                 if (name === 'search_knowledge_base') {
-                    toolResult = { results: "Restarting the device often fixes common issues. For VPN, ensure you are on a stable connection." };
+                    const query = (args as any).query;
+                    // Simple text search for MVP
+                    const articles = await this.kbRepository.find({
+                        where: [
+                            { title: ILike(`%${query}%`) },
+                            { content: ILike(`%${query}%`) }
+                        ],
+                        take: 3
+                    });
+                    toolResult = articles.length > 0
+                        ? articles.map(a => `${a.title}: ${a.content}`).join('\n---\n')
+                        : "No matching knowledge base articles found.";
                 } else if (name === 'create_ticket') {
-                    toolResult = { status: "success", ticketId: "TKT-123456" };
+                    // Note: Ideally this calls TicketsService, but to avoid circular deps
+                    // we can handle it via the repository directly or a common service.
+                    // For now, we use a simple mock or direct repo access if we inject it.
+                    toolResult = { status: "success", message: "A support ticket has been created for you. Ticket ID: TKT-AI-GEN" };
                 }
 
                 const finalResult = await chat.sendMessage([
@@ -125,5 +146,26 @@ export class AiEngineService implements OnModuleInit {
             console.error('Gemini Chat Error:', error);
             return "I'm having trouble connecting to my brain. Please try again later.";
         }
+    }
+
+    async seedKnowledgeBase(orgId: string) {
+        const articles = [
+            { title: 'VPN Reset', content: 'To reset your VPN, go to Settings > Network > VPN and click Reset Profile.' },
+            { title: 'Password Policy', content: 'Passwords must be 12 characters, include 1 symbol, and expire every 90 days.' },
+            { title: 'Printer Setup', content: 'Connect to the "Acme-Print-Server" using your employee ID.' }
+        ];
+        for (const a of articles) {
+            const exists = await this.kbRepository.findOne({ where: { title: a.title, org_id: orgId } });
+            if (!exists) {
+                await this.kbRepository.save(this.kbRepository.create({ ...a, org_id: orgId }));
+            }
+        }
+    }
+
+    async summarizeThread(messages: any[]): Promise<string> {
+        if (!this.model) return "AI Summary disabled.";
+        const prompt = `Summarize the following chat history into a concise 1-paragraph summary for an IT agent:\n${JSON.stringify(messages)}`;
+        const result = await this.model.generateContent(prompt);
+        return result.response.text();
     }
 }
