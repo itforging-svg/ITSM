@@ -7,6 +7,8 @@ import { Ticket } from '../tickets/entities/ticket.entity';
 import { TicketEvent } from '../tickets/entities/ticket-event.entity';
 import { Sla } from '../slas/entities/sla.entity';
 import { Asset } from '../assets/entities/asset.entity';
+import { KnowledgeBase } from '../ai-engine/entities/knowledge-base.entity';
+import { ChatSession } from '../ai-engine/entities/chat-session.entity';
 
 @Module({
     imports: [
@@ -20,7 +22,7 @@ import { Asset } from '../assets/entities/asset.entity';
                 username: configService.get<string>('DB_USER', 'postgres'),
                 password: configService.get<string>('DB_PASS', 'postgres'),
                 database: configService.get<string>('DB_NAME', 'itsm'),
-                entities: [User, Organization, Ticket, TicketEvent, Sla, Asset],
+                entities: [User, Organization, Ticket, TicketEvent, Sla, Asset, KnowledgeBase, ChatSession],
                 synchronize: true, // TODO: Disable in production
             }),
         }),

@@ -9,6 +9,7 @@ import { TicketsModule } from './tickets/tickets.module';
 import { SlasModule } from './slas/slas.module';
 import { AssetsModule } from './assets/assets.module';
 import { AiEngineModule } from './ai-engine/ai-engine.module';
+import { VirtualAgentModule } from './virtual-agent/virtual-agent.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { AiEngineModule } from './ai-engine/ai-engine.module';
     TicketsModule,
     SlasModule,
     AssetsModule,
-    AiEngineModule
+    AiEngineModule,
+    VirtualAgentModule
   ],
   controllers: [AppController],
   providers: [AppService],

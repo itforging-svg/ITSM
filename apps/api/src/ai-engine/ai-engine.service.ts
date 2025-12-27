@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, SchemaType } from '@google/generative-ai';
 
 @Injectable()
 export class AiEngineService implements OnModuleInit {
@@ -24,7 +24,6 @@ export class AiEngineService implements OnModuleInit {
         category: string;
     }> {
         if (!this.model) {
-            // Mock for demo if no API key
             return { priority: 'medium', sentiment: 0.5, summary: 'AI summary disabled', category: 'General' };
         }
 
@@ -44,12 +43,87 @@ export class AiEngineService implements OnModuleInit {
             const result = await this.model.generateContent(prompt);
             const response = await result.response;
             const text = response.text();
-            // Simple JSON extraction (best effort)
             const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
             return JSON.parse(jsonStr);
         } catch (error) {
             console.error('Gemini Analysis Error:', error);
             return { priority: 'medium', sentiment: 0.5, summary: 'Error in AI analysis', category: 'General' };
+        }
+    }
+
+    async chat(sessionId: string, message: string, history: any[]): Promise<string> {
+        if (!this.model) return "AI Chat is currently disabled (no API key).";
+
+        const chat = this.model.startChat({
+            history: history,
+            generationConfig: {
+                maxOutputTokens: 500,
+            },
+            tools: [
+                {
+                    functionDeclarations: [
+                        {
+                            name: 'search_knowledge_base',
+                            description: 'Search for IT troubleshooting steps and policies',
+                            parameters: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    query: { type: SchemaType.STRING, description: 'The search query' },
+                                },
+                                required: ['query'],
+                            },
+                        },
+                        {
+                            name: 'create_ticket',
+                            description: 'Create a new support ticket if user request cannot be resolved via chat',
+                            parameters: {
+                                type: SchemaType.OBJECT,
+                                properties: {
+                                    subject: { type: SchemaType.STRING },
+                                    description: { type: SchemaType.STRING },
+                                    priority: { type: SchemaType.STRING, enum: ['low', 'medium', 'high', 'urgent'], format: 'enum' },
+                                },
+                                required: ['subject', 'description'],
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        try {
+            const result = await chat.sendMessage(message);
+            const response = await result.response;
+
+            const candidate = response.candidates && response.candidates[0];
+            const call = candidate && candidate.content.parts.find(p => p.functionCall);
+
+            if (call && call.functionCall) {
+                const { name, args } = call.functionCall;
+                console.log(`Gemini is calling: ${name}`, args);
+
+                let toolResult: any;
+                if (name === 'search_knowledge_base') {
+                    toolResult = { results: "Restarting the device often fixes common issues. For VPN, ensure you are on a stable connection." };
+                } else if (name === 'create_ticket') {
+                    toolResult = { status: "success", ticketId: "TKT-123456" };
+                }
+
+                const finalResult = await chat.sendMessage([
+                    {
+                        functionResponse: {
+                            name,
+                            response: toolResult,
+                        }
+                    }
+                ]);
+                return finalResult.response.text();
+            }
+
+            return response.text();
+        } catch (error) {
+            console.error('Gemini Chat Error:', error);
+            return "I'm having trouble connecting to my brain. Please try again later.";
         }
     }
 }
